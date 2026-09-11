@@ -2,3 +2,4 @@
 *.bin filter=lfs diff=lfs merge=lfs -text
 *.pt filter=lfs diff=lfs merge=lfs -text
 *.pth filter=lfs diff=lfs merge=lfs -text
+control/qwen2.5-0.5b/model.safetensors filter=lfs diff=lfs merge=lfs -text
