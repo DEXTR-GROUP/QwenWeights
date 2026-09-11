@@ -1,0 +1,40 @@
+name: Qwen W1-W2
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Получить репозиторий
+        uses: actions/checkout@v4
+
+      - name: Подготовить Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Получить контрольный набор Qwen2.5-0.5B
+        run: |
+          python3 tools/prepare_qwen.py ./control/qwen2.5-0.5b
+
+      - name: Выполнить W2 инвентаризацию Safetensors
+        run: |
+          mkdir -p reports
+          python3 tools/qwen_inventory.py \
+            ./control/qwen2.5-0.5b \
+            --output ./reports/qwen2.5-0.5b-inventory.json
+
+      - name: Опубликовать отчёт W2
+        uses: actions/upload-artifact@v4
+        with:
+          name: qwen2.5-0.5b-w2-inventory
+          path: reports/qwen2.5-0.5b-inventory.json
+          if-no-files-found: error
+          retention-days: 30
