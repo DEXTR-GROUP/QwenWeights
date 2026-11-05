@@ -10,7 +10,12 @@ on:
   workflow_dispatch:
     inputs:
       apply:
-        description: "Выполнить удаление (иначе только предварительный просмотр)"
+        description: "Выполнить разовое удаление (по умолчанию только предварительный просмотр)"
+        required: true
+        type: boolean
+        default: false
+      activate_schedule:
+        description: "Включить еженедельное удаление после предварительной проверки (этот запуск останется dry-run)"
         required: true
         type: boolean
         default: false
@@ -39,11 +44,22 @@ jobs:
       - name: Validate shell syntax
         run: bash -n ops/github-artifact-retention.sh
 
+      - name: Explain disabled scheduled execution
+        if: github.event_name == 'schedule' && vars.ARTIFACT_RETENTION_SCHEDULE_ENABLED != 'true'
+        run: echo "Еженедельное удаление отключено. Сначала выполните dry-run, проверьте сводку, затем отдельно включите расписание через workflow_dispatch."
+
       - name: Validate and execute retention policy
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && (github.event_name != 'schedule' || vars.ARTIFACT_RETENTION_SCHEDULE_ENABLED == 'true')
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           RETENTION_DAYS: ${{ github.event_name == 'schedule' && 30 || inputs.retention_days }}
-          MODE: ${{ github.event_name == 'schedule' && 'apply' || (inputs.apply && 'apply' || 'dry-run') }}
+          MODE: ${{ github.event_name == 'schedule' && 'apply' || (inputs.activate_schedule && 'dry-run' || (inputs.apply && 'apply' || 'dry-run')) }}
         run: bash ops/github-artifact-retention.sh
+
+      - name: Enable weekly scheduled execution
+        if: github.event_name == 'workflow_dispatch' && inputs.activate_schedule
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: gh variable set ARTIFACT_RETENTION_SCHEDULE_ENABLED --body true --repo "$REPOSITORY"
