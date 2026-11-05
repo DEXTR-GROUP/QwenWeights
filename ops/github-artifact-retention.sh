@@ -31,7 +31,7 @@ cutoff_iso="$(date -u -d "@$cutoff_epoch" +%Y-%m-%dT%H:%M:%SZ)"
 runs_json="$(gh api --paginate --slurp "repos/$REPOSITORY/actions/runs?per_page=100" \
   | jq -c '[.[] | .workflow_runs[]? | select(.id != null and .workflow_id != null and .created_at != null)]')"
 
-keep_ids_json="$(jq -c '[.[] | select(.status == "completed" and .conclusion == "success")] | sort_by(.workflow_id, .created_at) | group_by(.workflow_id) | map(max_by(.created_at).id)' <<<"$runs_json")"
+keep_ids_json="$(jq -c '[.[] | select(.status == "completed" and .conclusion == "success")] | sort_by(.workflow_id, .created_at, .id) | group_by(.workflow_id) | map(max_by([.created_at, .id]).id)' <<<"$runs_json")"
 
 declare -A keep_ids=()
 declare -A run_status_by_id=()
@@ -126,10 +126,10 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {
     echo "## Очистка GitHub Actions Artifacts"
     echo
-    echo "- Репозиторий: `$REPOSITORY`"
-    echo "- Режим: `$MODE`"
-    echo "- Срок хранения: `$RETENTION_DAYS` дней"
-    echo "- Порог UTC: `$cutoff_iso`"
+    printf -- '- Репозиторий: `%s`\n' "$REPOSITORY"
+    printf -- '- Режим: `%s`\n' "$MODE"
+    printf -- '- Срок хранения: `%s` дней\n' "$RETENTION_DAYS"
+    printf -- '- Порог UTC: `%s`\n' "$cutoff_iso"
     echo "- Проверено артефактов: **$scanned**"
     echo "- Кандидатов старше срока: **$eligible**"
     echo "- Сохранено для последних успешных запусков: **$preserved_latest**"
