@@ -22,7 +22,7 @@ on:
         default: 30
 
 permissions:
-  contents: read
+  contents: write
   actions: write
 
 concurrency:
@@ -41,12 +41,23 @@ jobs:
       - name: Validate shell syntax
         run: bash -n ops/github-artifact-retention.sh
 
+      - name: Read scheduled execution gate
+        id: schedule_gate
+        if: github.event_name == 'schedule'
+        run: |
+          gate="$(tr -d '\r\n' < ops/artifact-retention-schedule.enabled)"
+          if [[ "$gate" == "enabled" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Explain disabled scheduled execution
-        if: github.event_name == 'schedule' && vars.ARTIFACT_RETENTION_SCHEDULE_ENABLED != 'true'
+        if: github.event_name == 'schedule' && steps.schedule_gate.outputs.enabled != 'true'
         run: echo "Еженедельное удаление отключено. Сначала выполните dry-run, проверьте сводку, затем отдельно включите расписание через workflow_dispatch."
 
       - name: Validate and execute retention policy
-        if: github.event_name != 'schedule' || vars.ARTIFACT_RETENTION_SCHEDULE_ENABLED == 'true'
+        if: github.event_name != 'schedule' || steps.schedule_gate.outputs.enabled == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -59,4 +70,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
-        run: gh variable set ARTIFACT_RETENTION_SCHEDULE_ENABLED --body true --repo "$REPOSITORY"
+        run: |
+          current_value="$(tr -d '\r\n' < ops/artifact-retention-schedule.enabled)"
+          if [[ "$current_value" == "enabled" ]]; then
+            echo "Еженедельное удаление уже включено."
+            exit 0
+          fi
+          current_sha="$(gh api "repos/$REPOSITORY/contents/ops/artifact-retention-schedule.enabled?ref=main" --jq .sha)"
+          encoded_content="$(printf 'enabled\n' | base64 -w0)"
+          gh api --method PUT "repos/$REPOSITORY/contents/ops/artifact-retention-schedule.enabled" \
+            -f message="ops: enable weekly artifact retention" \
+            -f content="$encoded_content" \
+            -f sha="$current_sha" \
+            -f branch=main
