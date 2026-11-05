@@ -6,6 +6,7 @@ on:
       - '.github/workflows/organization-artifact-retention.yml'
       - '.github/workflows/organization-artifact-retention-validate.yml'
       - 'ops/github-artifact-retention.sh'
+      - 'ops/artifact-retention-schedule.enabled'
 
 permissions:
   contents: read
