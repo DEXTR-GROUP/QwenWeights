@@ -1,0 +1,49 @@
+name: Repository Artifact Retention
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/organization-artifact-retention.yml'
+      - 'ops/github-artifact-retention.sh'
+  schedule:
+    - cron: "23 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Выполнить удаление (иначе только предварительный просмотр)"
+        required: true
+        type: boolean
+        default: false
+      retention_days:
+        description: "Срок хранения в днях"
+        required: true
+        type: number
+        default: 30
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: repository-artifact-retention
+  cancel-in-progress: false
+
+jobs:
+  retention:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Validate shell syntax
+        run: bash -n ops/github-artifact-retention.sh
+
+      - name: Validate and execute retention policy
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RETENTION_DAYS: ${{ github.event_name == 'schedule' && 30 || inputs.retention_days }}
+          MODE: ${{ github.event_name == 'schedule' && 'apply' || (inputs.apply && 'apply' || 'dry-run') }}
+        run: bash ops/github-artifact-retention.sh
